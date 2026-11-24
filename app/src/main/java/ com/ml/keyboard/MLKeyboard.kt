@@ -17,18 +17,36 @@ import android.os.Looper
 import android.provider.Settings
 import android.text.InputType
 import android.util.SparseArray
+import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+
+/* ======================= PALETTES ======================= */
+object Pal {
+    private fun p(vararg c: String) = IntArray(c.size) { Color.parseColor(c[it]) }
+    val names = listOf("Midnight", "Carbon", "Ocean", "Sunset", "Forest", "Paper")
+    val themes = arrayOf(
+        p("#0B0E1D","#141A33","#252D53","#3E4E90","#1B2240","#333F70","#EEF1FF","#98A2C6","#22D3EE","#F471B5","#04222D","#3A0A24","#2A3358","#14FFFFFF"),
+        p("#0A0A0C","#141417","#232329","#3A3A45","#17171B","#30303A","#F5F5F7","#9C9CA8","#34D399","#FBBF24","#052018","#241700","#2C2C34","#12FFFFFF"),
+        p("#04121F","#0A2334","#16405C","#2A6A92","#0E2E44","#215A7E","#EAF6FF","#8FB3C9","#38BDF8","#2DD4BF","#04202E","#03302A","#1C4763","#14FFFFFF"),
+        p("#170A1E","#241031","#3A1E4E","#623381","#2C1440","#542B6E","#FDF1F7","#C79AB8","#FB923C","#F43F5E","#2A0D02","#FFFFFF","#47285C","#14FFFFFF"),
+        p("#06140F","#0D2117","#1C3A28","#316045","#12291C","#2A5540","#ECFDF3","#93B8A3","#4ADE80","#A3E635","#052015","#16290A","#244A34","#12FFFFFF"),
+        p("#EDE9E1","#FFFFFF","#FFFFFF","#DFDACB","#F2EFE8","#D9D3C4","#22283A","#6C7288","#4F46E5","#DB2777","#FFFFFF","#FFFFFF","#DCD7C9","#00000000")
+    )
+}
 
 /* ======================= SERVICE ======================= */
 class MLKeyboardService : InputMethodService() {
@@ -219,16 +237,7 @@ class KBView(private val svc: MLKeyboardService) : View(svc) {
     private val prefs = svc.prefs
     private val dens = resources.displayMetrics.density
     private fun dp(v: Int) = v * dens
-    private fun pal(vararg c: String) = IntArray(c.size) { Color.parseColor(c[it]) }
-
-    private val themes = arrayOf(
-        pal("#0B0E1D","#141A33","#252D53","#3E4E90","#1B2240","#333F70","#EEF1FF","#98A2C6","#22D3EE","#F471B5","#04222D","#3A0A24","#2A3358","#14FFFFFF"),
-        pal("#0A0A0C","#141417","#232329","#3A3A45","#17171B","#30303A","#F5F5F7","#9C9CA8","#34D399","#FBBF24","#052018","#241700","#2C2C34","#12FFFFFF"),
-        pal("#04121F","#0A2334","#16405C","#2A6A92","#0E2E44","#215A7E","#EAF6FF","#8FB3C9","#38BDF8","#2DD4BF","#04202E","#03302A","#1C4763","#14FFFFFF"),
-        pal("#170A1E","#241031","#3A1E4E","#623381","#2C1440","#542B6E","#FDF1F7","#C79AB8","#FB923C","#F43F5E","#2A0D02","#FFFFFF","#47285C","#14FFFFFF"),
-        pal("#06140F","#0D2117","#1C3A28","#316045","#12291C","#2A5540","#ECFDF3","#93B8A3","#4ADE80","#A3E635","#052015","#16290A","#244A34","#12FFFFFF"),
-        pal("#EDE9E1","#FFFFFF","#FFFFFF","#DFDACB","#F2EFE8","#D9D3C4","#22283A","#6C7288","#4F46E5","#DB2777","#FFFFFF","#FFFFFF","#DCD7C9","#00000000")
-    )
+    private val themes = Pal.themes
     private var themeIdx = 0
     private var colFrom = themes[0]
     private var colTo = themes[0]
@@ -805,119 +814,406 @@ class KBView(private val svc: MLKeyboardService) : View(svc) {
     }
 }
 
+/* ======================= AURORA HEADER ======================= */
+class AuroraView(ctx: Context) : View(ctx) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var live = true
+    private fun blob(c: Canvas, x: Float, y: Float, r: Float, color: Int, a: Int) {
+        val g = RadialGradient(x, y, r,
+            intArrayOf(Color.argb(a, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT),
+            floatArrayOf(0f, 1f), Shader.TileMode.CLAMP)
+        p.shader = g
+        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), p)
+        p.shader = null
+    }
+    override fun onDraw(c: Canvas) {
+        c.drawColor(Color.parseColor("#080B18"))
+        val t = System.currentTimeMillis() / 1000f
+        val w = width.toFloat(); val h = height.toFloat()
+        blob(c, w * 0.18f + sin(t * 0.25f) * w * 0.08f, h * 0.05f, w * 0.75f, Color.parseColor("#22D3EE"), 52)
+        blob(c, w * 0.88f + cos(t * 0.19f) * w * 0.07f, h * 0.25f, w * 0.68f, Color.parseColor("#F471B5"), 46)
+        blob(c, w * 0.5f + sin(t * 0.15f + 1f) * w * 0.1f, h * 1.05f, w * 0.8f, Color.parseColor("#8B5CF6"), 40)
+        if (live) postInvalidateDelayed(40)
+    }
+    override fun onWindowVisibilityChanged(v: Int) {
+        super.onWindowVisibilityChanged(v)
+        live = v == VISIBLE
+        if (live) invalidate()
+    }
+}
+
+/* ======================= LIVE MINI KEYBOARD ======================= */
+class MiniKeyboard(ctx: Context) : View(ctx) {
+    private val prefs = ctx.getSharedPreferences("ml", Context.MODE_PRIVATE)
+    private val d = resources.displayMetrics.density
+    private fun dp(v: Int) = v * d
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val t = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val fm = Paint.FontMetrics()
+    private val r = RectF()
+    private val rows = listOf("qwertyuiop", "asdfghjkl", "zxcvbnm")
+    private val seq = "mlkeyboard"
+    private var stepI = 0
+    private var acc = 0f
+    private var last = 0L
+    private var idx = prefs.getInt("theme", 0)
+    private var from = idx
+    private var mix = 1f
+    private var live = true
+
+    private fun mixc(i: Int): Int {
+        val a = Pal.themes[from.coerceIn(0, Pal.themes.size - 1)][i]
+        val b = Pal.themes[idx.coerceIn(0, Pal.themes.size - 1)][i]
+        if (mix >= 1f) return b
+        val q = 1f - mix
+        return Color.argb(255,
+            (Color.red(a) * q + Color.red(b) * mix).toInt(),
+            (Color.green(a) * q + Color.green(b) * mix).toInt(),
+            (Color.blue(a) * q + Color.blue(b) * mix).toInt())
+    }
+    private fun base(cy: Float): Float { t.getFontMetrics(fm); return cy - (fm.ascent + fm.descent) / 2f }
+
+    override fun onDraw(c: Canvas) {
+        val now = System.currentTimeMillis()
+        val dt = if (last == 0L) 16f else (now - last).coerceIn(1L, 48L).toFloat()
+        last = now
+        val cur = prefs.getInt("theme", 0)
+        if (cur != idx) { from = idx; idx = cur; mix = 0f }
+        if (mix < 1f) mix = min(1f, mix + dt / 300f)
+        acc += dt
+        if (acc > 480f) { acc = 0f; stepI = (stepI + 1) % seq.length }
+        val glow = max(0f, 1f - acc / 340f)
+        val hot = seq[stepI]
+
+        val pad = dp(9); val gap = dp(4)
+        val kh = dp(25)
+        r.set(0f, 0f, width.toFloat(), height.toFloat())
+        p.color = mixc(0); c.drawRoundRect(r, dp(16), dp(16), p)
+        p.style = Paint.Style.STROKE; p.strokeWidth = d; p.color = mixc(12)
+        c.drawRoundRect(r, dp(16), dp(16), p); p.style = Paint.Style.FILL
+
+        var y = pad
+        for (ri in rows.indices) {
+            val s = rows[ri]
+            val inset = if (ri == 1) dp(9) else if (ri == 2) dp(16) else 0f
+            val avail = width - pad * 2 - inset * 2 - gap * (s.length - 1)
+            val kw = avail / s.length
+            var x = pad + inset
+            for (ch in s) {
+                val on = ch == hot
+                r.set(x, y, x + kw, y + kh)
+                p.color = if (on) mixc(8) else mixc(2)
+                if (on) p.alpha = (110 + 145 * glow).toInt()
+                c.drawRoundRect(r, dp(6), dp(6), p)
+                p.alpha = 255
+                t.textSize = dp(10); t.color = if (on) mixc(10) else mixc(6)
+                t.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                c.drawText(ch.toString(), x + kw / 2, base(y + kh / 2), t)
+                x += kw + gap
+            }
+            y += kh + gap
+        }
+        val bw = width - pad * 2
+        r.set(pad, y, pad + bw * 0.16f, y + kh)
+        p.color = mixc(4); c.drawRoundRect(r, dp(6), dp(6), p)
+        r.set(pad + bw * 0.19f, y, pad + bw * 0.80f, y + kh)
+        p.color = mixc(4); c.drawRoundRect(r, dp(6), dp(6), p)
+        t.textSize = dp(9); t.color = mixc(7)
+        c.drawText("English", pad + bw * 0.495f, base(y + kh / 2), t)
+        r.set(pad + bw * 0.83f, y, width - pad, y + kh)
+        p.color = mixc(9); c.drawRoundRect(r, dp(6), dp(6), p)
+        t.color = mixc(11); t.textSize = dp(11)
+        c.drawText("⏎", pad + bw * 0.915f, base(y + kh / 2), t)
+        if (live) postInvalidateOnAnimation()
+    }
+    override fun onWindowVisibilityChanged(v: Int) {
+        super.onWindowVisibilityChanged(v)
+        live = v == VISIBLE
+        if (live) { last = 0L; invalidate() }
+    }
+}
+
+/* ======================= THEME TILE ======================= */
+class ThemeTile(ctx: Context, val index: Int) : View(ctx) {
+    private val d = resources.displayMetrics.density
+    private fun dp(v: Int) = v * d
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val t = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val fm = Paint.FontMetrics()
+    private val r = RectF()
+    var selected = false
+    var onTap: ((Int) -> Unit)? = null
+    private fun base(cy: Float): Float { t.getFontMetrics(fm); return cy - (fm.ascent + fm.descent) / 2f }
+
+    override fun onDraw(c: Canvas) {
+        val th = Pal.themes[index]
+        val w = width.toFloat(); val h = height.toFloat()
+        r.set(d, d, w - d, h - d)
+        p.color = th[0]; c.drawRoundRect(r, dp(15), dp(15), p)
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = if (selected) dp(2) else d
+        p.color = if (selected) th[8] else th[12]
+        c.drawRoundRect(r, dp(15), dp(15), p)
+        p.style = Paint.Style.FILL
+        val pad = dp(11)
+        val kw = (w - pad * 2 - dp(8)) / 3f
+        var x = pad
+        for (i in 0..2) {
+            r.set(x, dp(15), x + kw, dp(37))
+            p.color = if (i == 1) th[8] else th[2]
+            c.drawRoundRect(r, dp(6), dp(6), p)
+            x += kw + dp(4)
+        }
+        r.set(pad, dp(43), w - pad, dp(53))
+        p.color = th[4]; c.drawRoundRect(r, dp(5), dp(5), p)
+        r.set(w - pad - dp(22), dp(43), w - pad, dp(53))
+        p.color = th[9]; c.drawRoundRect(r, dp(5), dp(5), p)
+        t.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        t.textSize = dp(11); t.color = if (selected) th[8] else th[7]
+        c.drawText(Pal.names[index], w / 2, base(h - dp(16)), t)
+        if (selected) {
+            p.color = th[8]
+            c.drawCircle(w - dp(14), dp(13), dp(4), p)
+        }
+    }
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_UP) { onTap?.invoke(index); performClick() }
+        return true
+    }
+    override fun performClick(): Boolean { super.performClick(); return true }
+}
+
+/* ======================= SEGMENTED TABS ======================= */
+class SegTabs(ctx: Context, private val labels: List<String>) : View(ctx) {
+    private val d = resources.displayMetrics.density
+    private fun dp(v: Int) = v * d
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val t = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val fm = Paint.FontMetrics()
+    private val r = RectF()
+    private var pos = 0f
+    var index = 0
+    var onSelect: ((Int) -> Unit)? = null
+    private fun base(cy: Float): Float { t.getFontMetrics(fm); return cy - (fm.ascent + fm.descent) / 2f }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        r.set(0f, 0f, w, h)
+        p.color = Color.parseColor("#111730"); c.drawRoundRect(r, dp(14), dp(14), p)
+        p.style = Paint.Style.STROKE; p.strokeWidth = d; p.color = Color.parseColor("#232C50")
+        c.drawRoundRect(r, dp(14), dp(14), p); p.style = Paint.Style.FILL
+        val cw = w / labels.size
+        pos += (index - pos) * 0.22f
+        if (abs(index - pos) < 0.002f) pos = index.toFloat()
+        val x = pos * cw
+        r.set(x + dp(4), dp(4), x + cw - dp(4), h - dp(4))
+        p.color = Color.parseColor("#22D3EE"); p.alpha = 34
+        c.drawRoundRect(r, dp(11), dp(11), p); p.alpha = 255
+        p.style = Paint.Style.STROKE; p.strokeWidth = d; p.color = Color.parseColor("#6622D3EE")
+        c.drawRoundRect(r, dp(11), dp(11), p); p.style = Paint.Style.FILL
+        t.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        t.textSize = dp(13)
+        for (i in labels.indices) {
+            t.color = if (i == index) Color.parseColor("#22D3EE") else Color.parseColor("#8E99C0")
+            c.drawText(labels[i], cw * (i + 0.5f), base(h / 2), t)
+        }
+        if (pos != index.toFloat()) postInvalidateOnAnimation()
+    }
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_UP) {
+            val i = (e.x / (width / labels.size)).toInt().coerceIn(0, labels.size - 1)
+            if (i != index) { index = i; onSelect?.invoke(i); performClick() }
+            invalidate()
+        }
+        return true
+    }
+    override fun performClick(): Boolean { super.performClick(); return true }
+}
+
 /* ======================= APP ======================= */
 class MainActivity : Activity() {
     private lateinit var prefs: SharedPreferences
-    private var status: TextView? = null
-    private val swatches = ArrayList<View>()
     private val dens get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * dens).toInt()
-    private val BG = Color.parseColor("#0B0E1D")
-    private val SURF = Color.parseColor("#151A33")
-    private val LINE = Color.parseColor("#2A3358")
-    private val TXT = Color.parseColor("#EEF1FF")
-    private val MUT = Color.parseColor("#98A2C6")
+    private val BG = Color.parseColor("#080B18")
+    private val CARD = Color.parseColor("#111730")
+    private val LINE = Color.parseColor("#232C50")
+    private val TXT = Color.parseColor("#EDF0FF")
+    private val MUT = Color.parseColor("#8E99C0")
     private val ACC = Color.parseColor("#22D3EE")
+    private val OK = Color.parseColor("#34D399")
+    private val WARN = Color.parseColor("#FBBF24")
+    private var statusView: TextView? = null
+    private val tiles = ArrayList<ThemeTile>()
+    private val pages = ArrayList<LinearLayout>()
+    private var seg: SegTabs? = null
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         prefs = getSharedPreferences("ml", MODE_PRIVATE)
+
         val root = LinearLayout(this)
         root.orientation = LinearLayout.VERTICAL
         root.setBackgroundColor(BG)
-        root.setPadding(dp(18), dp(26), dp(18), dp(30))
 
-        val hero = LinearLayout(this)
-        hero.orientation = LinearLayout.VERTICAL
-        hero.setPadding(dp(20), dp(22), dp(20), dp(22))
-        val hg = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.parseColor("#1B2450"), Color.parseColor("#2A1440")))
-        hg.cornerRadius = dp(22).toFloat()
-        hg.setStroke(dp(1), LINE)
-        hero.background = hg
-        hero.addView(label("ML Keyboard", 30f, TXT, true))
-        hero.addView(label("Fast · Clean · English", 13f, MUT, false))
-        val pill = label("Checking…", 12f, ACC, true)
-        pill.setPadding(dp(12), dp(7), dp(12), dp(7))
-        val pg = GradientDrawable()
-        pg.cornerRadius = dp(99).toFloat()
-        pg.setColor(Color.parseColor("#1A22D3EE"))
-        pg.setStroke(dp(1), Color.parseColor("#3322D3EE"))
-        pill.background = pg
-        val plp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        plp.topMargin = dp(14)
-        pill.layoutParams = plp
-        hero.addView(pill)
-        status = pill
+        val hero = FrameLayout(this)
+        val aur = AuroraView(this)
+        aur.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        hero.addView(aur)
+        val hc = LinearLayout(this)
+        hc.orientation = LinearLayout.VERTICAL
+        hc.setPadding(dp(22), dp(40), dp(22), dp(26))
+        val top = LinearLayout(this)
+        top.orientation = LinearLayout.HORIZONTAL
+        top.gravity = Gravity.CENTER_VERTICAL
+        val mono = TextView(this)
+        mono.text = "ML"
+        mono.textSize = 17f
+        mono.gravity = Gravity.CENTER
+        mono.setTextColor(Color.WHITE)
+        mono.setTypeface(mono.typeface, Typeface.BOLD)
+        val mg = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            intArrayOf(Color.parseColor("#8B5CF6"), Color.parseColor("#F471B5")))
+        mg.cornerRadius = dp(14).toFloat()
+        mono.background = mg
+        mono.layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
+        top.addView(mono)
+        val titles = LinearLayout(this)
+        titles.orientation = LinearLayout.VERTICAL
+        titles.setPadding(dp(14), 0, 0, 0)
+        titles.addView(label("ML Keyboard", 25f, TXT, true))
+        titles.addView(label("ENGLISH  ·  VERSION 2.0", 10.5f, MUT, false))
+        top.addView(titles)
+        hc.addView(top)
+        val st = label("Checking…", 12f, ACC, true)
+        st.setPadding(dp(14), dp(8), dp(14), dp(8))
+        val sg = GradientDrawable()
+        sg.cornerRadius = dp(99).toFloat()
+        sg.setColor(Color.parseColor("#141A33"))
+        sg.setStroke(dp(1), LINE)
+        st.background = sg
+        val slp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        slp.topMargin = dp(18)
+        st.layoutParams = slp
+        hc.addView(st)
+        statusView = st
+        hero.addView(hc)
         root.addView(hero)
 
-        root.addView(action("1 · Enable ML Keyboard", "Open system keyboard settings", true) {
+        val body = LinearLayout(this)
+        body.orientation = LinearLayout.VERTICAL
+        body.setPadding(dp(16), dp(4), dp(16), dp(30))
+
+        val prev = card("LIVE PREVIEW")
+        val mini = MiniKeyboard(this)
+        val mlp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(148))
+        mlp.topMargin = dp(10)
+        mini.layoutParams = mlp
+        prev.addView(mini)
+        prev.addView(label("This is your real keyboard theme. Change it below and watch it update.", 11.5f, MUT, false))
+        body.addView(prev)
+
+        val setup = card("GET STARTED")
+        setup.addView(step(1, "Enable ML Keyboard", "Allow it in system settings", true) {
             startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
         })
-        root.addView(action("2 · Choose ML Keyboard", "Set it as your active keyboard", false) {
+        setup.addView(step(2, "Choose ML Keyboard", "Make it your active keyboard", false) {
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
         })
+        body.addView(setup)
 
-        val tips = card("HOW TO USE")
-        tips.addView(label("Swipe the space bar to move the cursor.\nLong-press a key for accents and symbols.\nTap ✥ for copy / paste / arrows.\nTap ◑ to change theme instantly.", 12.5f, MUT, false))
-        root.addView(tips)
+        val tabs = SegTabs(this, listOf("Look", "Typing", "Guide"))
+        val tlp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46))
+        tlp.topMargin = dp(16)
+        tabs.layoutParams = tlp
+        tabs.onSelect = { i -> showPage(i) }
+        seg = tabs
+        body.addView(tabs)
 
-        val look = card("APPEARANCE")
-        look.addView(label("Theme", 13f, TXT, false))
-        val tr = LinearLayout(this)
-        tr.orientation = LinearLayout.HORIZONTAL
-        val c1 = listOf("#22D3EE","#34D399","#38BDF8","#FB923C","#4ADE80","#4F46E5")
-        val c2 = listOf("#F471B5","#FBBF24","#2DD4BF","#F43F5E","#A3E635","#DB2777")
-        swatches.clear()
-        for (i in c1.indices) {
-            val v = View(this)
-            val g = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.parseColor(c1[i]), Color.parseColor(c2[i])))
-            g.shape = GradientDrawable.OVAL
-            g.setStroke(dp(2), Color.TRANSPARENT)
-            v.background = g
-            val lp = LinearLayout.LayoutParams(dp(38), dp(38))
-            lp.marginEnd = dp(10)
-            v.layoutParams = lp
-            v.setOnClickListener { prefs.edit().putInt("theme", i).apply(); markTheme() }
-            swatches.add(v)
-            tr.addView(v)
+        val p0 = LinearLayout(this); p0.orientation = LinearLayout.VERTICAL
+        val look = card("THEME")
+        val grid = LinearLayout(this)
+        grid.orientation = LinearLayout.VERTICAL
+        tiles.clear()
+        for (r in 0..1) {
+            val rowL = LinearLayout(this)
+            rowL.orientation = LinearLayout.HORIZONTAL
+            val rlp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            rlp.topMargin = dp(if (r == 0) 10 else 8)
+            rowL.layoutParams = rlp
+            for (cc in 0..2) {
+                val i = r * 3 + cc
+                val tile = ThemeTile(this, i)
+                val lp = LinearLayout.LayoutParams(0, dp(94), 1f)
+                if (cc < 2) lp.marginEnd = dp(8)
+                tile.layoutParams = lp
+                tile.onTap = { k ->
+                    prefs.edit().putInt("theme", k).apply()
+                    markTiles()
+                }
+                tiles.add(tile)
+                rowL.addView(tile)
+            }
+            grid.addView(rowL)
         }
-        val tl = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        tl.topMargin = dp(8)
-        tr.layoutParams = tl
-        look.addView(tr)
+        look.addView(grid)
+        p0.addView(look)
 
-        val hv = label("Key height · ${prefs.getInt("keyH", 48)}", 13f, TXT, false)
+        val size = card("KEY SIZE")
+        val hv = label("${prefs.getInt("keyH", 48)} dp", 26f, ACC, true)
         val hlp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        hlp.topMargin = dp(14)
+        hlp.topMargin = dp(6)
         hv.layoutParams = hlp
-        look.addView(hv)
+        size.addView(hv)
+        size.addView(label("Drag to make keys taller or shorter.", 11.5f, MUT, false))
         val seek = SeekBar(this)
         seek.max = 18
         seek.progress = prefs.getInt("keyH", 48) - 44
         seek.progressTintList = ColorStateList.valueOf(ACC)
         seek.thumbTintList = ColorStateList.valueOf(ACC)
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) {
-                prefs.edit().putInt("keyH", 44 + p).apply()
-                hv.text = "Key height · ${44 + p}"
+            override fun onProgressChanged(s: SeekBar?, v: Int, u: Boolean) {
+                prefs.edit().putInt("keyH", 44 + v).apply()
+                hv.text = "${44 + v} dp"
             }
             override fun onStartTrackingTouch(s: SeekBar?) {}
             override fun onStopTrackingTouch(s: SeekBar?) {}
         })
-        look.addView(seek)
-        look.addView(sw("Number row", "numRow", true))
-        look.addView(sw("Animations", "anim", true))
-        root.addView(look)
+        size.addView(seek)
+        size.addView(toggleRow("Number row", "Extra row of digits on top", "numRow", true))
+        size.addView(toggleRow("Animations", "Smooth motion and key ripples", "anim", true))
+        p0.addView(size)
 
-        val beh = card("TYPING")
-        beh.addView(sw("Key sound", "sound", true))
-        beh.addView(sw("Haptic feedback", "haptic", true))
-        beh.addView(sw("Auto-capitalization", "autoCap", true))
-        beh.addView(sw("Double-space for period", "dblSpace", true))
-        beh.addView(sw("Learn my words", "learn", true))
-        root.addView(beh)
+        val p1 = LinearLayout(this); p1.orientation = LinearLayout.VERTICAL
+        val feel = card("FEEDBACK")
+        feel.addView(toggleRow("Key sound", "Soft click on every tap", "sound", true))
+        feel.addView(toggleRow("Haptic feedback", "Small vibration on tap", "haptic", true))
+        p1.addView(feel)
+        val smart = card("SMART TYPING")
+        smart.addView(toggleRow("Auto-capitalization", "Capitalize new sentences", "autoCap", true))
+        smart.addView(toggleRow("Double-space period", "Two spaces make \". \"", "dblSpace", true))
+        smart.addView(toggleRow("Learn my words", "Suggestions improve as you type", "learn", true))
+        p1.addView(smart)
+
+        val p2 = LinearLayout(this); p2.orientation = LinearLayout.VERTICAL
+        val guide = card("GESTURES")
+        guide.addView(guideRow("Swipe space bar", "Move the text cursor left and right"))
+        guide.addView(guideRow("Long-press a letter", "Pick accents like à é ñ ü"))
+        guide.addView(guideRow("Long-press . or ,", "Quick punctuation panel"))
+        guide.addView(guideRow("Double-tap ⇧", "Lock capitals"))
+        guide.addView(guideRow("Tap ✥", "Select all, copy, paste, arrows"))
+        guide.addView(guideRow("Tap ◑", "Switch theme without leaving the app you are in"))
+        p2.addView(guide)
+        val priv = card("PRIVACY")
+        priv.addView(label("ML Keyboard has no internet permission. Learned words, recent emoji and settings never leave your phone.", 12f, MUT, false))
+        p2.addView(priv)
+
+        pages.clear()
+        pages.add(p0); pages.add(p1); pages.add(p2)
+        for (i in pages.indices) {
+            pages[i].visibility = if (i == 0) View.VISIBLE else View.GONE
+            body.addView(pages[i])
+        }
 
         val test = card("TRY IT HERE")
         val et = EditText(this)
@@ -926,38 +1222,50 @@ class MainActivity : Activity() {
         et.setHintTextColor(MUT)
         et.setPadding(dp(14), dp(14), dp(14), dp(14))
         val eg = GradientDrawable()
-        eg.setColor(Color.parseColor("#0F1430"))
+        eg.setColor(Color.parseColor("#0C1128"))
         eg.cornerRadius = dp(14).toFloat()
         eg.setStroke(dp(1), LINE)
         et.background = eg
         val elp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        elp.topMargin = dp(8)
+        elp.topMargin = dp(10)
         et.layoutParams = elp
         test.addView(et)
-        root.addView(test)
-        root.addView(label("ML Keyboard v2.0 · Everything stays on your device.", 11f, MUT, false))
+        body.addView(test)
+        body.addView(label("ML Keyboard  ·  Made for fast, clean English typing.", 11f, MUT, false))
 
+        root.addView(body)
         val scroll = ScrollView(this)
         scroll.setBackgroundColor(BG)
+        scroll.isVerticalScrollBarEnabled = false
         scroll.addView(root)
         setContentView(scroll)
-        root.alpha = 0f
-        root.animate().alpha(1f).setDuration(340).start()
-        markTheme()
+        body.alpha = 0f
+        body.translationY = dp(14).toFloat()
+        body.animate().alpha(1f).translationY(0f).setDuration(420).start()
+        markTiles()
     }
 
-    override fun onResume() { super.onResume(); refresh(); markTheme() }
+    override fun onResume() { super.onResume(); refresh(); markTiles() }
 
-    private fun markTheme() {
-        val cur = prefs.getInt("theme", 0)
-        for (i in swatches.indices) {
-            val g = swatches[i].background as GradientDrawable
-            g.setStroke(dp(2), if (i == cur) TXT else Color.TRANSPARENT)
+    private fun showPage(i: Int) {
+        for (k in pages.indices) {
+            val v = pages[k]
+            if (k == i) {
+                v.visibility = View.VISIBLE
+                v.alpha = 0f
+                v.translationY = dp(10).toFloat()
+                v.animate().alpha(1f).translationY(0f).setDuration(260).start()
+            } else v.visibility = View.GONE
         }
     }
 
+    private fun markTiles() {
+        val cur = prefs.getInt("theme", 0)
+        for (i in tiles.indices) { tiles[i].selected = i == cur; tiles[i].invalidate() }
+    }
+
     private fun refresh() {
-        val s = status ?: return
+        val s = statusView ?: return
         var enabled = false
         try {
             val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -966,15 +1274,15 @@ class MainActivity : Activity() {
         val used = prefs.getBoolean("used", false)
         s.text = when {
             used && enabled -> "●  Active — ML Keyboard is in use"
-            enabled -> "●  Enabled — tap step 2 to select it"
-            else -> "●  Not enabled yet — tap step 1"
+            enabled -> "●  Enabled — tap step 2 below"
+            else -> "●  Not enabled yet — tap step 1 below"
         }
-        s.setTextColor(if (enabled) ACC else Color.parseColor("#FBBF24"))
+        s.setTextColor(if (enabled) OK else WARN)
     }
 
-    private fun label(t: String, size: Float, color: Int, bold: Boolean): TextView {
+    private fun label(txt: String, size: Float, color: Int, bold: Boolean): TextView {
         val v = TextView(this)
-        v.text = t
+        v.text = txt
         v.textSize = size
         v.setTextColor(color)
         if (bold) v.setTypeface(v.typeface, Typeface.BOLD)
@@ -985,56 +1293,89 @@ class MainActivity : Activity() {
     private fun card(title: String): LinearLayout {
         val l = LinearLayout(this)
         l.orientation = LinearLayout.VERTICAL
-        l.setPadding(dp(16), dp(14), dp(16), dp(16))
+        l.setPadding(dp(16), dp(15), dp(16), dp(16))
         val g = GradientDrawable()
-        g.setColor(SURF)
-        g.cornerRadius = dp(18).toFloat()
+        g.setColor(CARD)
+        g.cornerRadius = dp(20).toFloat()
         g.setStroke(dp(1), LINE)
         l.background = g
         val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         lp.topMargin = dp(14)
         l.layoutParams = lp
-        l.addView(label(title, 11f, ACC, true))
+        l.addView(label(title, 10.5f, ACC, true))
         return l
     }
 
-    private fun action(t: String, sub: String, primary: Boolean, fn: () -> Unit): View {
-        val l = LinearLayout(this)
-        l.orientation = LinearLayout.VERTICAL
-        l.setPadding(dp(16), dp(14), dp(16), dp(14))
-        val g = if (primary) {
-            GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(ACC, Color.parseColor("#38BDF8")))
-        } else {
-            val x = GradientDrawable()
-            x.setColor(SURF)
-            x.setStroke(dp(1), LINE)
-            x
-        }
-        g.cornerRadius = dp(16).toFloat()
-        l.background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), g, null)
-        l.addView(label(t, 15f, if (primary) Color.parseColor("#04222D") else TXT, true))
-        l.addView(label(sub, 11.5f, if (primary) Color.parseColor("#0A3A47") else MUT, false))
-        l.isClickable = true
-        l.setOnClickListener { fn() }
+    private fun step(n: Int, title: String, sub: String, primary: Boolean, fn: () -> Unit): View {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.setPadding(dp(10), dp(12), dp(12), dp(12))
+        val g = GradientDrawable()
+        g.cornerRadius = dp(15).toFloat()
+        if (primary) g.setColor(Color.parseColor("#16233F")) else g.setColor(Color.parseColor("#0E1430"))
+        g.setStroke(dp(1), LINE)
+        row.background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), g, null)
+        val badge = TextView(this)
+        badge.text = n.toString()
+        badge.textSize = 13f
+        badge.gravity = Gravity.CENTER
+        badge.setTypeface(badge.typeface, Typeface.BOLD)
+        badge.setTextColor(if (primary) Color.parseColor("#04222D") else ACC)
+        val bg = GradientDrawable()
+        bg.shape = GradientDrawable.OVAL
+        if (primary) bg.setColor(ACC) else { bg.setColor(Color.TRANSPARENT); bg.setStroke(dp(2), ACC) }
+        badge.background = bg
+        badge.layoutParams = LinearLayout.LayoutParams(dp(30), dp(30))
+        row.addView(badge)
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(dp(13), 0, 0, 0)
+        col.addView(label(title, 14f, TXT, true))
+        col.addView(label(sub, 11.5f, MUT, false))
+        col.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        row.addView(col)
+        val arrow = label("›", 22f, MUT, false)
+        row.addView(arrow)
+        row.isClickable = true
+        row.setOnClickListener { fn() }
         val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         lp.topMargin = dp(10)
-        l.layoutParams = lp
+        row.layoutParams = lp
+        return row
+    }
+
+    private fun guideRow(title: String, sub: String): View {
+        val l = LinearLayout(this)
+        l.orientation = LinearLayout.VERTICAL
+        l.setPadding(0, dp(9), 0, dp(9))
+        l.addView(label(title, 13.5f, TXT, true))
+        l.addView(label(sub, 11.5f, MUT, false))
         return l
     }
 
-    private fun sw(t: String, key: String, def: Boolean): View {
+    private fun toggleRow(title: String, sub: String, key: String, def: Boolean): View {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.setPadding(0, dp(10), 0, dp(10))
+        val col = LinearLayout(this)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(0, 0, dp(12), 0)
+        col.addView(label(title, 14f, TXT, false))
+        col.addView(label(sub, 11.5f, MUT, false))
+        col.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        row.addView(col)
         val s = Switch(this)
-        s.text = t
-        s.textSize = 14f
-        s.setTextColor(TXT)
         s.isChecked = prefs.getBoolean(key, def)
-        s.thumbTintList = ColorStateList.valueOf(if (s.isChecked) ACC else MUT)
-        s.trackTintList = ColorStateList.valueOf(Color.parseColor("#3322D3EE"))
-        s.setPadding(0, dp(9), 0, dp(9))
+        s.thumbTintList = ColorStateList.valueOf(if (s.isChecked) ACC else Color.parseColor("#4A5578"))
+        s.trackTintList = ColorStateList.valueOf(if (s.isChecked) Color.parseColor("#3322D3EE") else Color.parseColor("#202748"))
         s.setOnCheckedChangeListener { _, v ->
             prefs.edit().putBoolean(key, v).apply()
-            s.thumbTintList = ColorStateList.valueOf(if (v) ACC else MUT)
+            s.thumbTintList = ColorStateList.valueOf(if (v) ACC else Color.parseColor("#4A5578"))
+            s.trackTintList = ColorStateList.valueOf(if (v) Color.parseColor("#3322D3EE") else Color.parseColor("#202748"))
         }
-        return s
+        row.addView(s)
+        return row
     }
 }
