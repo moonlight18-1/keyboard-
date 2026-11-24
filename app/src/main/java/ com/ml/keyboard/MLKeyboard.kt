@@ -670,13 +670,19 @@ class MainActivity : Activity() {
     override fun onResume() { super.onResume(); refresh() }
 
     private fun refresh() {
-        val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_INPUT_METHODS)?.contains(packageName) == true
-        val def = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)?.startsWith("$packageName/") == true
-        status.text = when {
-            def -> "✅ ML Keyboard is active"
-            enabled -> "⚠️ Enabled — tap step 2 to select it"
-            else -> "⚠️ Not enabled yet — tap step 1"
+        var enabled = false
+        try {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            for (im in imm.enabledInputMethodList) {
+                if (im.packageName == packageName) enabled = true
+            }
+        } catch (e: Throwable) {
+            enabled = false
         }
+        status.text = if (enabled)
+            "✅ Da bat ML Keyboard - bam buoc 2 de chon"
+        else
+            "⚠️ Chua bat - bam buoc 1 roi gat cong tac"
     }
 
     private fun space(h: Int) = View(this).apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(h)) }
