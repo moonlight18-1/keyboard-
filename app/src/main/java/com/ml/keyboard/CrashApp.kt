@@ -1,4 +1,3 @@
-
 package com.ml.keyboard
 
 import android.app.Activity
@@ -34,9 +33,9 @@ class CrashActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         val trace = intent?.getStringExtra("trace")
-            ?: getSharedPreferences("crash", MODE_PRIVATE).getString("last", "khong co du lieu")
+            ?: getSharedPreferences("crash", MODE_PRIVATE).getString("last", "No data")
         val tv = TextView(this)
-        tv.text = "=== LOI APP - CHUP MAN HINH NAY GUI MINH ===\n\n" + trace
+        tv.text = "=== APP ERROR — SEND THIS SCREENSHOT ===\n\n" + trace
         tv.textSize = 11f
         tv.setTextColor(Color.WHITE)
         tv.setTextIsSelectable(true)
