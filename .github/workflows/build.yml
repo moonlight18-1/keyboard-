@@ -1,0 +1,472 @@
+name: Build ML Keyboard APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Generate project files
+        run: |
+          mkdir -p app/src/main/java/com/mlkeyboard
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
+          mkdir -p app/src/main/res/drawable
+
+          cat > settings.gradle << 'GRADLE_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "MLKeyboard"
+          include ':app'
+          GRADLE_EOF
+
+          cat > build.gradle << 'GRADLE_EOF'
+          plugins {
+              id 'com.android.application' version '8.1.4' apply false
+          }
+          GRADLE_EOF
+
+          cat > gradle.properties << 'GRADLE_EOF'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          GRADLE_EOF
+
+          cat > app/build.gradle << 'GRADLE_EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.mlkeyboard'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.mlkeyboard"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          GRADLE_EOF
+
+          cat > app/src/main/AndroidManifest.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@android:style/Theme.Material.Light.DarkActionBar">
+                  <service
+                      android:name=".MLKeyboardService"
+                      android:label="@string/app_name"
+                      android:permission="android.permission.BIND_INPUT_METHOD"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.view.InputMethod" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.view.im"
+                          android:resource="@xml/method" />
+                  </service>
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          XML_EOF
+
+          cat > app/src/main/java/com/mlkeyboard/MLKeyboardService.java << 'JAVA_EOF'
+          package com.mlkeyboard;
+
+          import android.inputmethodservice.InputMethodService;
+          import android.inputmethodservice.Keyboard;
+          import android.inputmethodservice.KeyboardView;
+          import android.view.KeyEvent;
+          import android.view.View;
+          import android.view.inputmethod.InputConnection;
+
+          public class MLKeyboardService extends InputMethodService
+                  implements KeyboardView.OnKeyboardActionListener {
+
+              private KeyboardView keyboardView;
+              private Keyboard qwertyKeyboard;
+              private Keyboard symbolsKeyboard;
+              private Keyboard currentKeyboard;
+              private boolean caps = false;
+
+              @Override
+              public View onCreateInputView() {
+                  keyboardView = (KeyboardView) getLayoutInflater()
+                          .inflate(R.layout.keyboard_view, null);
+                  qwertyKeyboard = new Keyboard(this, R.xml.qwerty);
+                  symbolsKeyboard = new Keyboard(this, R.xml.symbols);
+                  currentKeyboard = qwertyKeyboard;
+                  keyboardView.setKeyboard(currentKeyboard);
+                  keyboardView.setOnKeyboardActionListener(this);
+                  keyboardView.setPreviewEnabled(true);
+                  return keyboardView;
+              }
+
+              @Override
+              public void onKey(int primaryCode, int[] keyCodes) {
+                  InputConnection ic = getCurrentInputConnection();
+                  if (ic == null) return;
+
+                  switch (primaryCode) {
+                      case Keyboard.KEYCODE_DELETE:
+                          CharSequence selected = ic.getSelectedText(0);
+                          if (selected != null && selected.length() > 0) {
+                              ic.commitText("", 1);
+                          } else {
+                              ic.deleteSurroundingText(1, 0);
+                          }
+                          break;
+                      case Keyboard.KEYCODE_SHIFT:
+                          caps = !caps;
+                          currentKeyboard.setShifted(caps);
+                          keyboardView.invalidateAllKeys();
+                          break;
+                      case Keyboard.KEYCODE_DONE:
+                          ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
+                          ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
+                          break;
+                      case Keyboard.KEYCODE_MODE_CHANGE:
+                          currentKeyboard = symbolsKeyboard;
+                          caps = false;
+                          keyboardView.setKeyboard(currentKeyboard);
+                          keyboardView.setShifted(false);
+                          break;
+                      case Keyboard.KEYCODE_CANCEL:
+                          currentKeyboard = qwertyKeyboard;
+                          keyboardView.setKeyboard(currentKeyboard);
+                          break;
+                      default:
+                          char code = (char) primaryCode;
+                          if (Character.isLetter(code) && caps) {
+                              code = Character.toUpperCase(code);
+                          }
+                          ic.commitText(String.valueOf(code), 1);
+                          if (caps && Character.isLetter((char) primaryCode)) {
+                              caps = false;
+                              currentKeyboard.setShifted(false);
+                              keyboardView.invalidateAllKeys();
+                          }
+                          break;
+                  }
+              }
+
+              @Override public void onPress(int primaryCode) {}
+              @Override public void onRelease(int primaryCode) {}
+              @Override public void onText(CharSequence text) {
+                  InputConnection ic = getCurrentInputConnection();
+                  if (ic != null) ic.commitText(text, 1);
+              }
+              @Override public void swipeLeft() {}
+              @Override public void swipeRight() {}
+              @Override public void swipeDown() { requestHideSelf(0); }
+              @Override public void swipeUp() {}
+          }
+          JAVA_EOF
+
+          cat > app/src/main/java/com/mlkeyboard/MainActivity.java << 'JAVA_EOF'
+          package com.mlkeyboard;
+
+          import android.app.Activity;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Bundle;
+          import android.provider.Settings;
+          import android.view.inputmethod.InputMethodManager;
+          import android.widget.Button;
+
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  setContentView(R.layout.activity_main);
+
+                  Button enableBtn = findViewById(R.id.btn_enable);
+                  Button selectBtn = findViewById(R.id.btn_select);
+
+                  enableBtn.setOnClickListener(v ->
+                          startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)));
+
+                  selectBtn.setOnClickListener(v -> {
+                      InputMethodManager imm = (InputMethodManager)
+                              getSystemService(Context.INPUT_METHOD_SERVICE);
+                      if (imm != null) imm.showInputMethodPicker();
+                  });
+              }
+          }
+          JAVA_EOF
+
+          cat > app/src/main/res/layout/keyboard_view.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <android.inputmethodservice.KeyboardView
+              xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/keyboard_view"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:background="#1a1a2e"
+              android:keyBackground="@drawable/key_background"
+              android:keyTextColor="#ffffff"
+              android:keyTextSize="20sp"
+              android:labelTextSize="12sp"
+              android:keyPreviewLayout="@layout/key_preview"
+              android:padding="4dp" />
+          XML_EOF
+
+          cat > app/src/main/res/layout/key_preview.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <TextView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content"
+              android:background="#444466"
+              android:textColor="#ffffff"
+              android:textSize="28sp"
+              android:padding="8dp" />
+          XML_EOF
+
+          cat > app/src/main/res/layout/activity_main.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:gravity="center"
+              android:padding="24dp">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="@string/app_name"
+                  android:textSize="28sp"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="16dp"/>
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="@string/instructions"
+                  android:gravity="center"
+                  android:layout_marginBottom="24dp"/>
+              <Button
+                  android:id="@+id/btn_enable"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="@string/enable_keyboard"/>
+              <Button
+                  android:id="@+id/btn_select"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_marginTop="8dp"
+                  android:text="@string/select_keyboard"/>
+          </LinearLayout>
+          XML_EOF
+
+          cat > app/src/main/res/values/strings.xml << 'XML_EOF'
+          <resources>
+              <string name="app_name">ML Keyboard</string>
+              <string name="subtype_en_us">English (ML)</string>
+              <string name="instructions">Bước 1: Nhấn "Bật bàn phím" để mở cài đặt.\nBước 2: Bật ML Keyboard trong danh sách.\nBước 3: Nhấn "Chọn bàn phím" để chọn ML Keyboard.</string>
+              <string name="enable_keyboard">Bật bàn phím</string>
+              <string name="select_keyboard">Chọn bàn phím</string>
+          </resources>
+          XML_EOF
+
+          cat > app/src/main/res/xml/method.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <input-method xmlns:android="http://schemas.android.com/apk/res/android"
+              android:supportsSwitchingToNextInputMethod="true">
+              <subtype
+                  android:label="@string/subtype_en_us"
+                  android:imeSubtypeLocale="en_US"
+                  android:imeSubtypeMode="keyboard" />
+          </input-method>
+          XML_EOF
+
+          cat > app/src/main/res/xml/qwerty.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
+              android:keyWidth="10%p"
+              android:keyHeight="52dp"
+              android:horizontalGap="2dp"
+              android:verticalGap="5dp">
+              <Row>
+                  <Key android:codes="113" android:keyLabel="q" android:keyEdgeFlags="left"/>
+                  <Key android:codes="119" android:keyLabel="w"/>
+                  <Key android:codes="101" android:keyLabel="e"/>
+                  <Key android:codes="114" android:keyLabel="r"/>
+                  <Key android:codes="116" android:keyLabel="t"/>
+                  <Key android:codes="121" android:keyLabel="y"/>
+                  <Key android:codes="117" android:keyLabel="u"/>
+                  <Key android:codes="105" android:keyLabel="i"/>
+                  <Key android:codes="111" android:keyLabel="o"/>
+                  <Key android:codes="112" android:keyLabel="p" android:keyEdgeFlags="right"/>
+              </Row>
+              <Row>
+                  <Key android:codes="97" android:keyLabel="a" android:keyEdgeFlags="left"/>
+                  <Key android:codes="115" android:keyLabel="s"/>
+                  <Key android:codes="100" android:keyLabel="d"/>
+                  <Key android:codes="102" android:keyLabel="f"/>
+                  <Key android:codes="103" android:keyLabel="g"/>
+                  <Key android:codes="104" android:keyLabel="h"/>
+                  <Key android:codes="106" android:keyLabel="j"/>
+                  <Key android:codes="107" android:keyLabel="k"/>
+                  <Key android:codes="108" android:keyLabel="l" android:keyEdgeFlags="right"/>
+              </Row>
+              <Row>
+                  <Key android:codes="-1" android:keyLabel="⇧" android:keyWidth="15%p"
+                       android:isModifier="true" android:isSticky="true" android:keyEdgeFlags="left"/>
+                  <Key android:codes="122" android:keyLabel="z"/>
+                  <Key android:codes="120" android:keyLabel="x"/>
+                  <Key android:codes="99"  android:keyLabel="c"/>
+                  <Key android:codes="118" android:keyLabel="v"/>
+                  <Key android:codes="98"  android:keyLabel="b"/>
+                  <Key android:codes="110" android:keyLabel="n"/>
+                  <Key android:codes="109" android:keyLabel="m"/>
+                  <Key android:codes="-5" android:keyLabel="⌫" android:keyWidth="15%p"
+                       android:isRepeatable="true" android:keyEdgeFlags="right"/>
+              </Row>
+              <Row>
+                  <Key android:codes="-2" android:keyLabel="?123" android:keyWidth="15%p" android:keyEdgeFlags="left"/>
+                  <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p"/>
+                  <Key android:codes="32" android:keyLabel=" " android:keyWidth="40%p" android:isRepeatable="true"/>
+                  <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p"/>
+                  <Key android:codes="-4" android:keyLabel="⏎" android:keyWidth="20%p" android:keyEdgeFlags="right"/>
+              </Row>
+          </Keyboard>
+          XML_EOF
+
+          cat > app/src/main/res/xml/symbols.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
+              android:keyWidth="10%p"
+              android:keyHeight="52dp"
+              android:horizontalGap="2dp"
+              android:verticalGap="5dp">
+              <Row>
+                  <Key android:codes="49" android:keyLabel="1" android:keyEdgeFlags="left"/>
+                  <Key android:codes="50" android:keyLabel="2"/>
+                  <Key android:codes="51" android:keyLabel="3"/>
+                  <Key android:codes="52" android:keyLabel="4"/>
+                  <Key android:codes="53" android:keyLabel="5"/>
+                  <Key android:codes="54" android:keyLabel="6"/>
+                  <Key android:codes="55" android:keyLabel="7"/>
+                  <Key android:codes="56" android:keyLabel="8"/>
+                  <Key android:codes="57" android:keyLabel="9"/>
+                  <Key android:codes="48" android:keyLabel="0" android:keyEdgeFlags="right"/>
+              </Row>
+              <Row>
+                  <Key android:codes="64" android:keyLabel="@" android:keyEdgeFlags="left"/>
+                  <Key android:codes="35" android:keyLabel="#"/>
+                  <Key android:codes="36" android:keyLabel="$"/>
+                  <Key android:codes="37" android:keyLabel="%"/>
+                  <Key android:codes="38" android:keyLabel="&amp;"/>
+                  <Key android:codes="42" android:keyLabel="*"/>
+                  <Key android:codes="45" android:keyLabel="-"/>
+                  <Key android:codes="43" android:keyLabel="+"/>
+                  <Key android:codes="40" android:keyLabel="("/>
+                  <Key android:codes="41" android:keyLabel=")" android:keyEdgeFlags="right"/>
+              </Row>
+              <Row>
+                  <Key android:codes="33" android:keyLabel="!" android:keyEdgeFlags="left"/>
+                  <Key android:codes="34" android:keyLabel="&quot;"/>
+                  <Key android:codes="39" android:keyLabel="'"/>
+                  <Key android:codes="58" android:keyLabel=":"/>
+                  <Key android:codes="59" android:keyLabel=";"/>
+                  <Key android:codes="47" android:keyLabel="/"/>
+                  <Key android:codes="63" android:keyLabel="?"/>
+                  <Key android:codes="-5" android:keyLabel="⌫" android:keyWidth="20%p"
+                       android:isRepeatable="true" android:keyEdgeFlags="right"/>
+              </Row>
+              <Row>
+                  <Key android:codes="-3" android:keyLabel="ABC" android:keyWidth="20%p" android:keyEdgeFlags="left"/>
+                  <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p"/>
+                  <Key android:codes="32" android:keyLabel=" " android:keyWidth="35%p" android:isRepeatable="true"/>
+                  <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p"/>
+                  <Key android:codes="-4" android:keyLabel="⏎" android:keyWidth="20%p" android:keyEdgeFlags="right"/>
+              </Row>
+          </Keyboard>
+          XML_EOF
+
+          cat > app/src/main/res/drawable/key_background.xml << 'XML_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <selector xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:state_pressed="true">
+                  <shape>
+                      <solid android:color="#444466"/>
+                      <corners android:radius="6dp"/>
+                  </shape>
+              </item>
+              <item>
+                  <shape>
+                      <solid android:color="#2a2a4a"/>
+                      <corners android:radius="6dp"/>
+                  </shape>
+              </item>
+          </selector>
+          XML_EOF
+
+          cat > app/src/main/res/drawable/ic_launcher.xml << 'XML_EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="48dp"
+              android:height="48dp"
+              android:viewportWidth="48"
+              android:viewportHeight="48">
+              <path android:fillColor="#3F51B5"
+                  android:pathData="M0,0h48v48h-48z"/>
+              <path android:fillColor="#FFFFFF"
+                  android:pathData="M6,10h4v4h-4z M12,10h4v4h-4z M18,10h4v4h-4z M24,10h4v4h-4z M30,10h4v4h-4z M36,10h6v4h-6z M6,16h4v4h-4z M12,16h4v4h-4z M18,16h4v4h-4z M24,16h4v4h-4z M30,16h4v4h-4z M36,16h6v4h-6z M6,22h4v4h-4z M12,22h4v4h-4z M18,22h4v4h-4z M24,22h4v4h-4z M30,22h4v4h-4z M36,22h6v4h-6z M6,28h4v4h-4z M12,28h6v4h-6z M22,28h4v4h-4z M28,28h14v4h-14z M6,34h36v6h-36z"/>
+          </vector>
+          XML_EOF
+
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
+
+      - name: Build Debug APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MLKeyboard-APK
+          path: app/build/outputs/apk/debug/*.apk
