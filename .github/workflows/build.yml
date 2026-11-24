@@ -81,18 +81,6 @@ jobs:
           }
           GRADLE_EOF
 
-          # THÊM FILE NÀY ĐỂ SỬA LỖI
-          cat > app/src/main/res/values/ids.xml << 'XML_EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <item name="keycode_shift" type="integer">-1</item>
-              <item name="keycode_mode_change" type="integer">-2</item>
-              <item name="keycode_cancel" type="integer">-3</item>
-              <item name="keycode_done" type="integer">-4</item>
-              <item name="keycode_delete" type="integer">-5</item>
-          </resources>
-          XML_EOF
-
           cat > app/src/main/AndroidManifest.xml << 'XML_EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -163,46 +151,40 @@ jobs:
                   InputConnection ic = getCurrentInputConnection();
                   if (ic == null) return;
 
-                  switch (primaryCode) {
-                      case Keyboard.KEYCODE_DELETE:
-                          CharSequence selected = ic.getSelectedText(0);
-                          if (selected != null && selected.length() > 0) {
-                              ic.commitText("", 1);
-                          } else {
-                              ic.deleteSurroundingText(1, 0);
-                          }
-                          break;
-                      case Keyboard.KEYCODE_SHIFT:
-                          caps = !caps;
-                          currentKeyboard.setShifted(caps);
-                          keyboardView.invalidateAllKeys();
-                          break;
-                      case Keyboard.KEYCODE_DONE:
-                          ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
-                          ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
-                          break;
-                      case Keyboard.KEYCODE_MODE_CHANGE:
-                          currentKeyboard = symbolsKeyboard;
+                  // Sử dụng mã dương an toàn thay vì số âm
+                  if (primaryCode == 1001) { // Shift
+                      caps = !caps;
+                      currentKeyboard.setShifted(caps);
+                      keyboardView.invalidateAllKeys();
+                  } else if (primaryCode == 1002) { // Delete
+                      CharSequence selected = ic.getSelectedText(0);
+                      if (selected != null && selected.length() > 0) {
+                          ic.commitText("", 1);
+                      } else {
+                          ic.deleteSurroundingText(1, 0);
+                      }
+                  } else if (primaryCode == 1003) { // Enter
+                      ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
+                      ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER));
+                  } else if (primaryCode == 1004) { // ?123
+                      currentKeyboard = symbolsKeyboard;
+                      caps = false;
+                      keyboardView.setKeyboard(currentKeyboard);
+                      keyboardView.setShifted(false);
+                  } else if (primaryCode == 1005) { // ABC
+                      currentKeyboard = qwertyKeyboard;
+                      keyboardView.setKeyboard(currentKeyboard);
+                  } else {
+                      char code = (char) primaryCode;
+                      if (Character.isLetter(code) && caps) {
+                          code = Character.toUpperCase(code);
+                      }
+                      ic.commitText(String.valueOf(code), 1);
+                      if (caps && Character.isLetter((char) primaryCode)) {
                           caps = false;
-                          keyboardView.setKeyboard(currentKeyboard);
-                          keyboardView.setShifted(false);
-                          break;
-                      case Keyboard.KEYCODE_CANCEL:
-                          currentKeyboard = qwertyKeyboard;
-                          keyboardView.setKeyboard(currentKeyboard);
-                          break;
-                      default:
-                          char code = (char) primaryCode;
-                          if (Character.isLetter(code) && caps) {
-                              code = Character.toUpperCase(code);
-                          }
-                          ic.commitText(String.valueOf(code), 1);
-                          if (caps && Character.isLetter((char) primaryCode)) {
-                              caps = false;
-                              currentKeyboard.setShifted(false);
-                              keyboardView.invalidateAllKeys();
-                          }
-                          break;
+                          currentKeyboard.setShifted(false);
+                          keyboardView.invalidateAllKeys();
+                      }
                   }
               }
 
@@ -365,7 +347,7 @@ jobs:
                   <Key android:codes="108" android:keyLabel="l" android:keyEdgeFlags="right"/>
               </Row>
               <Row>
-                  <Key android:codes="@integer/keycode_shift" android:keyLabel="⇧" android:keyWidth="15%p"
+                  <Key android:codes="1001" android:keyLabel="⇧" android:keyWidth="15%p"
                        android:isModifier="true" android:isSticky="true" android:keyEdgeFlags="left"/>
                   <Key android:codes="122" android:keyLabel="z"/>
                   <Key android:codes="120" android:keyLabel="x"/>
@@ -374,15 +356,15 @@ jobs:
                   <Key android:codes="98"  android:keyLabel="b"/>
                   <Key android:codes="110" android:keyLabel="n"/>
                   <Key android:codes="109" android:keyLabel="m"/>
-                  <Key android:codes="@integer/keycode_delete" android:keyLabel="⌫" android:keyWidth="15%p"
+                  <Key android:codes="1002" android:keyLabel="⌫" android:keyWidth="15%p"
                        android:isRepeatable="true" android:keyEdgeFlags="right"/>
               </Row>
               <Row>
-                  <Key android:codes="@integer/keycode_mode_change" android:keyLabel="?123" android:keyWidth="15%p" android:keyEdgeFlags="left"/>
+                  <Key android:codes="1004" android:keyLabel="?123" android:keyWidth="15%p" android:keyEdgeFlags="left"/>
                   <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p"/>
                   <Key android:codes="32" android:keyLabel=" " android:keyWidth="40%p" android:isRepeatable="true"/>
                   <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p"/>
-                  <Key android:codes="@integer/keycode_done" android:keyLabel="⏎" android:keyWidth="20%p" android:keyEdgeFlags="right"/>
+                  <Key android:codes="1003" android:keyLabel="⏎" android:keyWidth="20%p" android:keyEdgeFlags="right"/>
               </Row>
           </Keyboard>
           XML_EOF
@@ -426,15 +408,15 @@ jobs:
                   <Key android:codes="59" android:keyLabel=";"/>
                   <Key android:codes="47" android:keyLabel="/"/>
                   <Key android:codes="63" android:keyLabel="?"/>
-                  <Key android:codes="@integer/keycode_delete" android:keyLabel="⌫" android:keyWidth="20%p"
+                  <Key android:codes="1002" android:keyLabel="⌫" android:keyWidth="20%p"
                        android:isRepeatable="true" android:keyEdgeFlags="right"/>
               </Row>
               <Row>
-                  <Key android:codes="@integer/keycode_cancel" android:keyLabel="ABC" android:keyWidth="20%p" android:keyEdgeFlags="left"/>
+                  <Key android:codes="1005" android:keyLabel="ABC" android:keyWidth="20%p" android:keyEdgeFlags="left"/>
                   <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p"/>
                   <Key android:codes="32" android:keyLabel=" " android:keyWidth="35%p" android:isRepeatable="true"/>
                   <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p"/>
-                  <Key android:codes="@integer/keycode_done" android:keyLabel="⏎" android:keyWidth="20%p" android:keyEdgeFlags="right"/>
+                  <Key android:codes="1003" android:keyLabel="⏎" android:keyWidth="20%p" android:keyEdgeFlags="right"/>
               </Row>
           </Keyboard>
           XML_EOF
