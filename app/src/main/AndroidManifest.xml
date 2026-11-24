@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+        android:name=".CrashApp"
         android:label="ML Keyboard"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:allowBackup="true">
@@ -10,6 +11,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <activity android:name=".CrashActivity" android:exported="false"/>
 
         <service
             android:name=".MLKeyboardService"
